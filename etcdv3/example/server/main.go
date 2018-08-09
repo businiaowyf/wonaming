@@ -15,9 +15,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"../../../etcdv3"
-	"../pb"
-
+	"github.com/businiaowyf/wonaming/etcdv3"
+	"github.com/businiaowyf/wonaming/etcdv3/example/pb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
