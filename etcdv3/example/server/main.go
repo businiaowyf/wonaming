@@ -40,7 +40,7 @@ func main() {
 
 	pb.RegisterHelloServiceServer(s, &hello{})
 
-	go etcdv3.Register(":2379", svcName, addr, 5)
+	go etcdv3.Register("localhost:2379;localhost:22379;localhost:32379", svcName, addr, 5)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL, syscall.SIGHUP, syscall.SIGQUIT)

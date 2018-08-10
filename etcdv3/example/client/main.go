@@ -19,10 +19,11 @@ import (
 )
 
 func main() {
-	r := etcdv3.NewResolver("localhost:2379")
+	r := etcdv3.NewResolver("localhost:2379;localhost:22379;localhost:32379")
 	resolver.Register(r)
 
-	conn, err := grpc.Dial(r.Scheme()+"://author/project/test", grpc.WithBalancerName("round_robin"), grpc.WithInsecure())
+	//https://github.com/grpc/grpc/blob/master/doc/naming.md
+	conn, err := grpc.Dial(r.Scheme()+"://authority/project/test", grpc.WithBalancerName("round_robin"), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}

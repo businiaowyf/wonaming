@@ -38,7 +38,7 @@ func (r *etcdResolver) Build(target resolver.Target, cc resolver.ClientConn, opt
 	if cli == nil {
 		cli, err = clientv3.New(clientv3.Config{
 			Endpoints:   strings.Split(r.rawAddr, ";"),
-			DialTimeout: 15 * time.Second,
+			DialTimeout: 3 * time.Second,
 		})
 		if err != nil {
 			return nil, err
@@ -47,6 +47,7 @@ func (r *etcdResolver) Build(target resolver.Target, cc resolver.ClientConn, opt
 
 	r.cc = cc
 
+	log.Printf("watch: target.scheme=%v, target.Endpoint=%v", target.Scheme, target.Endpoint)
 	go r.watch("/" + target.Scheme + "/" + target.Endpoint + "/")
 
 	return r, nil
@@ -73,6 +74,7 @@ func (r *etcdResolver) watch(keyPrefix string) {
 		log.Println(err)
 	} else {
 		for i := range getResp.Kvs {
+			log.Printf("key=%v, value=%v, prefix=%v", string(getResp.Kvs[i].Key), string(getResp.Kvs[i].Value), keyPrefix)
 			addrList = append(addrList, resolver.Address{Addr: strings.TrimPrefix(string(getResp.Kvs[i].Key), keyPrefix)})
 		}
 	}
