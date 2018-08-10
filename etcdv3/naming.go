@@ -34,7 +34,7 @@ func Register(etcdAddr, name string, addr string, ttl int64) error {
 
 	go func() {
 		for {
-			getResp, err := cli.Get(context.Background(), "/"+schema+"/"+name+"/"+addr)
+			getResp, err := cli.Get(context.Background(), "/"+scheme+"/"+name+"/"+addr)
 			if err != nil {
 				log.Println(err)
 			} else if getResp.Count == 0 {
@@ -59,7 +59,7 @@ func withAlive(name string, addr string, ttl int64) error {
 		return err
 	}
 
-	_, err = cli.Put(context.Background(), "/"+schema+"/"+name+"/"+addr, addr, clientv3.WithLease(leaseResp.ID))
+	_, err = cli.Put(context.Background(), "/"+scheme+"/"+name+"/"+addr, addr, clientv3.WithLease(leaseResp.ID))
 	if err != nil {
 		return err
 	}
@@ -74,6 +74,7 @@ func withAlive(name string, addr string, ttl int64) error {
 // UnRegister remove service from etcd
 func UnRegister(name string, addr string) {
 	if cli != nil {
-		cli.Delete(context.Background(), "/"+schema+"/"+name+"/"+addr)
+		cli.Delete(context.Background(), "/"+scheme+"/"+name+"/"+addr)
+		cli.Close()
 	}
 }

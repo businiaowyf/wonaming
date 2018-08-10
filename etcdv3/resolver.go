@@ -10,6 +10,7 @@ package etcdv3
 import (
 	"context"
 	"log"
+	"reflect"
 	"strings"
 	"time"
 
@@ -18,25 +19,32 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const schema = "wonamingv3"
+const scheme = "wonamingv3"
 
 var cli *clientv3.Client
 
-type etcdResolver struct {
+type etcdBuilder struct {
 	rawAddr string
 }
 
-// NewResolver initialize an etcd client
-func NewResolver(etcdAddr string) resolver.Builder {
-	return &etcdResolver{rawAddr: etcdAddr}
+type etcdResolver struct {
+	cc   resolver.ClientConn
+	done chan struct{}
 }
 
-func (r *etcdResolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+// NewBuilder initialize an etcd client
+func NewBuilder(etcdAddr string) resolver.Builder {
+	return &etcdBuilder{
+		rawAddr: etcdAddr,
+	}
+}
+
+func (b *etcdBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
 	var err error
 
 	if cli == nil {
 		cli, err = clientv3.New(clientv3.Config{
-			Endpoints:   strings.Split(r.rawAddr, ";"),
+			Endpoints:   strings.Split(b.rawAddr, ";"),
 			DialTimeout: 3 * time.Second,
 		})
 		if err != nil {
@@ -44,26 +52,33 @@ func (r *etcdResolver) Build(target resolver.Target, cc resolver.ClientConn, opt
 		}
 	}
 
+	// cc's type is *grpc.ccResolverWrapper
 	log.Printf("watch: target.scheme=%v, target.Endpoint=%v", target.Scheme, target.Endpoint)
-	go r.watch("/"+target.Scheme+"/"+target.Endpoint+"/", cc)
-
+	r := &etcdResolver{
+		cc:   cc,
+		done: make(chan struct{}),
+	}
+	go r.watch("/" + target.Scheme + "/" + target.Endpoint + "/")
 	return r, nil
 }
 
-func (r etcdResolver) Scheme() string {
-	return schema
+func (r *etcdBuilder) Scheme() string {
+	return scheme
 }
 
-func (r etcdResolver) ResolveNow(rn resolver.ResolveNowOption) {
-	log.Println("ResolveNow") // TODO check
+// ResolveNow() and Close() are from interface resolver.Resolver
+func (r *etcdResolver) ResolveNow(rn resolver.ResolveNowOption) {
+	log.Println("Resolver ResolveNow") // TODO check
 }
 
 // Close closes the resolver.
-func (r etcdResolver) Close() {
-	log.Println("Close")
+// Close() will be invoked when close grpc.ClientConn
+func (r *etcdResolver) Close() {
+	log.Println("Resolver Close")
+	close(r.done)
 }
 
-func (r *etcdResolver) watch(keyPrefix string, cc resolver.ClientConn) {
+func (r *etcdResolver) watch(keyPrefix string) {
 	var addrList []resolver.Address
 
 	getResp, err := cli.Get(context.Background(), keyPrefix, clientv3.WithPrefix())
@@ -76,27 +91,38 @@ func (r *etcdResolver) watch(keyPrefix string, cc resolver.ClientConn) {
 		}
 	}
 
-	cc.NewAddress(addrList)
+	log.Printf("Init new address list, cc=%v, new addrlist=%v", reflect.TypeOf(r.cc), addrList)
+	r.cc.NewAddress(addrList)
 
+	// todo, Watch may be canceled, need to restart Watch()
 	rch := cli.Watch(context.Background(), keyPrefix, clientv3.WithPrefix())
-	for n := range rch {
-		for _, ev := range n.Events {
-			addr := strings.TrimPrefix(string(ev.Kv.Key), keyPrefix)
-			switch ev.Type {
-			case mvccpb.PUT:
-				if !exist(addrList, addr) {
-					addrList = append(addrList, resolver.Address{Addr: addr})
-					cc.NewAddress(addrList)
-				}
-			case mvccpb.DELETE:
-				if s, ok := remove(addrList, addr); ok {
-					addrList = s
-					cc.NewAddress(addrList)
+	//for n := range rch {
+	for {
+		select {
+		case <-r.done:
+			log.Println("Connection closed, quit watch")
+			return
+		case n := <-rch:
+			for _, ev := range n.Events {
+				addr := strings.TrimPrefix(string(ev.Kv.Key), keyPrefix)
+				switch ev.Type {
+				case mvccpb.PUT:
+					if !exist(addrList, addr) {
+						addrList = append(addrList, resolver.Address{Addr: addr})
+						log.Printf("Add new address list, cc=%v, new addr=%v", r.cc, addr)
+						r.cc.NewAddress(addrList)
+					}
+				case mvccpb.DELETE:
+					if s, ok := remove(addrList, addr); ok {
+						addrList = s
+						log.Printf("Del new address list, cc=%v, new addr=%v", r.cc, addr)
+						r.cc.NewAddress(addrList)
+					}
 				}
 			}
-			//log.Printf("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
 		}
 	}
+	log.Println("watch quit")
 }
 
 func exist(l []resolver.Address, addr string) bool {
