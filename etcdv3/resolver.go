@@ -24,7 +24,6 @@ var cli *clientv3.Client
 
 type etcdResolver struct {
 	rawAddr string
-	cc      resolver.ClientConn
 }
 
 // NewResolver initialize an etcd client
@@ -45,10 +44,8 @@ func (r *etcdResolver) Build(target resolver.Target, cc resolver.ClientConn, opt
 		}
 	}
 
-	r.cc = cc
-
 	log.Printf("watch: target.scheme=%v, target.Endpoint=%v", target.Scheme, target.Endpoint)
-	go r.watch("/" + target.Scheme + "/" + target.Endpoint + "/")
+	go r.watch("/"+target.Scheme+"/"+target.Endpoint+"/", cc)
 
 	return r, nil
 }
@@ -66,7 +63,7 @@ func (r etcdResolver) Close() {
 	log.Println("Close")
 }
 
-func (r *etcdResolver) watch(keyPrefix string) {
+func (r *etcdResolver) watch(keyPrefix string, cc resolver.ClientConn) {
 	var addrList []resolver.Address
 
 	getResp, err := cli.Get(context.Background(), keyPrefix, clientv3.WithPrefix())
@@ -79,7 +76,7 @@ func (r *etcdResolver) watch(keyPrefix string) {
 		}
 	}
 
-	r.cc.NewAddress(addrList)
+	cc.NewAddress(addrList)
 
 	rch := cli.Watch(context.Background(), keyPrefix, clientv3.WithPrefix())
 	for n := range rch {
@@ -89,12 +86,12 @@ func (r *etcdResolver) watch(keyPrefix string) {
 			case mvccpb.PUT:
 				if !exist(addrList, addr) {
 					addrList = append(addrList, resolver.Address{Addr: addr})
-					r.cc.NewAddress(addrList)
+					cc.NewAddress(addrList)
 				}
 			case mvccpb.DELETE:
 				if s, ok := remove(addrList, addr); ok {
 					addrList = s
-					r.cc.NewAddress(addrList)
+					cc.NewAddress(addrList)
 				}
 			}
 			//log.Printf("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
