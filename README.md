@@ -5,19 +5,11 @@ Wonaming supports etcd and consul as the service register and discovery backend.
 
 ## example
 
-### etcd
+### etcdv3
 
 #### client
-go run main.go --reg http://127.0.0.1:2379
+go run main.go
 
 #### server
-go run main.go --reg http://127.0.0.1:2379
+go run main.go -addr="127.0.0.1:2379"
 
-
-### consul
-
-#### client
-go run main.go --reg 127.0.0.1:8500
-
-#### server
-go run main.go --reg 127.0.0.1:8500
