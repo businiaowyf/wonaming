@@ -1,10 +1,3 @@
-/**
- * Copyright 2015-2017, Wothing Co., Ltd.
- * All rights reserved.
- *
- * Created by elvizlai on 2017/11/28 11:40.
- */
-
 package etcdv3
 
 import (
@@ -21,14 +14,18 @@ func Register(etcdAddr, name string, addr string, ttl int64) error {
 	var err error
 
 	if cli == nil {
+		// If DialTimeout = 0, New() will return immediately.
 		cli, err = clientv3.New(clientv3.Config{
 			Endpoints:   strings.Split(etcdAddr, ";"),
-			DialTimeout: 3 * time.Second,
+			DialTimeout: 0 * time.Second,
 		})
 		if err != nil {
+			log.Println("New etcdv3 client fail")
 			return err
 		}
 	}
+
+	log.Println("New etcdv3 client succeed")
 
 	ticker := time.NewTicker(time.Second * time.Duration(ttl))
 
@@ -41,6 +38,8 @@ func Register(etcdAddr, name string, addr string, ttl int64) error {
 				err = withAlive(name, addr, ttl)
 				if err != nil {
 					log.Println(err)
+				} else {
+					log.Println("Set service in etcdv3 succeed")
 				}
 			} else {
 				// do nothing
@@ -72,9 +71,12 @@ func withAlive(name string, addr string, ttl int64) error {
 }
 
 // UnRegister remove service from etcd
+// The service will be removed automatically if the process is killed
 func UnRegister(name string, addr string) {
 	if cli != nil {
-		cli.Delete(context.Background(), "/"+scheme+"/"+name+"/"+addr)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		cli.Delete(ctx, "/"+scheme+"/"+name+"/"+addr)
 		cli.Close()
 	}
 }

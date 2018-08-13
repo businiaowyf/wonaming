@@ -1,10 +1,3 @@
-/**
- * Copyright 2015-2017, Wothing Co., Ltd.
- * All rights reserved.
- *
- * Created by elvizlai on 2017/11/28 15:33.
- */
-
 package etcdv3
 
 import (
@@ -45,7 +38,7 @@ func (b *etcdBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts
 	if cli == nil {
 		cli, err = clientv3.New(clientv3.Config{
 			Endpoints:   strings.Split(b.rawAddr, ";"),
-			DialTimeout: 3 * time.Second,
+			DialTimeout: 0 * time.Second,
 		})
 		if err != nil {
 			return nil, err
@@ -83,7 +76,7 @@ func (r *etcdResolver) watch(keyPrefix string) {
 
 	getResp, err := cli.Get(context.Background(), keyPrefix, clientv3.WithPrefix())
 	if err != nil {
-		log.Println(err)
+		log.Println("etcdv3 Get error=", err)
 	} else {
 		for i := range getResp.Kvs {
 			log.Printf("key=%v, value=%v, prefix=%v", string(getResp.Kvs[i].Key), string(getResp.Kvs[i].Value), keyPrefix)
@@ -104,6 +97,10 @@ func (r *etcdResolver) watch(keyPrefix string) {
 			return
 		case n := <-rch:
 			for _, ev := range n.Events {
+				log.Println(n)
+				if n.Err() != nil {
+					log.Fatal("Event error=", n.Err())
+				}
 				addr := strings.TrimPrefix(string(ev.Kv.Key), keyPrefix)
 				switch ev.Type {
 				case mvccpb.PUT:
