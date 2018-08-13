@@ -3,7 +3,6 @@ package etcdv3
 import (
 	"context"
 	"log"
-	"reflect"
 	"strings"
 	"time"
 
@@ -84,7 +83,7 @@ func (r *etcdResolver) watch(keyPrefix string) {
 		}
 	}
 
-	log.Printf("Init new address list, cc=%v, new addrlist=%v", reflect.TypeOf(r.cc), addrList)
+	log.Printf("Init new address list, new addrlist=%v", addrList)
 	r.cc.NewAddress(addrList)
 
 	// todo, Watch may be canceled, need to restart Watch()
@@ -97,7 +96,6 @@ func (r *etcdResolver) watch(keyPrefix string) {
 			return
 		case n := <-rch:
 			for _, ev := range n.Events {
-				log.Println(n)
 				if n.Err() != nil {
 					log.Fatal("Event error=", n.Err())
 				}
